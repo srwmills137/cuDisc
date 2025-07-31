@@ -43,5 +43,36 @@ double vl_Z(GridRef& g, Field3DConstRef<T>& Qty, int i, int j, int k, int qind) 
     return vanleer_slope(dQF, dQB, cF, cB) ;
 }
 
+// van leer slopes for gas
+template<typename T>
+__device__ __host__
+double vl_R(GridRef& g, FieldConstRef<T>& Qty, int i, int j, int qind) {
+
+    double Rc = g.Rc(i);
+
+    double cF = (g.Rc(i+1) - Rc) / (g.Re(i+1)-Rc) ;
+    double cB = (g.Rc(i-1) - Rc) / (g.Re(i)-Rc) ;
+
+    double dQF = (Qty(i+1, j)[qind] - Qty(i, j)[qind]) / (g.Rc(i+1) - Rc) ;
+    double dQB = (Qty(i-1, j)[qind] - Qty(i, j)[qind]) / (g.Rc(i-1) - Rc) ;
+
+    return vanleer_slope(dQF, dQB, cF, cB) ;
+}
+
+template<typename T>
+__device__ __host__
+double vl_Z(GridRef& g, FieldConstRef<T>& Qty, int i, int j, int qind) {
+
+    double Zc = g.Zc(i,j);
+
+    double cF = (g.Zc(i,j+1) - Zc) / (g.Ze(i,j+1)-Zc) ;
+    double cB = (g.Zc(i,j-1) - Zc) / (g.Ze(i,j)-Zc) ;
+
+    double dQF = (Qty(i, j+1)[qind] - Qty(i, j)[qind]) / (g.Zc(i,j+1) - Zc) ;
+    double dQB = (Qty(i, j-1)[qind] - Qty(i, j)[qind]) / (g.Zc(i,j-1) - Zc) ;
+
+    return vanleer_slope(dQF, dQB, cF, cB) ;
+}
+
 
 #endif//_CUDISC_HEADERS_VAN_LEER_H_

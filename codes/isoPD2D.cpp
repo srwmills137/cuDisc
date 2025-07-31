@@ -54,6 +54,9 @@ void set_up_gas(Grid& g, CudaArray<double>& Sig_g, Field<Prims>& wg, CudaArray<d
             double Om2 = GMsun * Mstar / (g.Rc(i)*g.Rc(i)*g.Rc(i)) ;
             double H2 = cs2(i,j) / Om2 ;
             wg(i,j).rho = Sig_g[i] * std::exp(- 0.5 * g.Zc(i,j)*g.Zc(i,j) / H2) / std::sqrt(2 * M_PI * H2);
+            wg(i,j).v_phi = R_c(i) * Om2 ;
+            wg(i,j).v_R = 0 ;
+            wg(i,j).v_Z = 0 ;
         }
     }
 
@@ -225,7 +228,7 @@ int main() {
     double floor = 1.e-10;
 
     //compute_hydrostatic_equilibrium(star, g, Ws_g, cs2, Sig_g, gas_floor);
-    calc_gas_velocities(g, Sig_g, Ws_g, cs2, nu, alpha, star, gas_boundary, gas_floor);   
+    //calc_gas_velocities(g, Sig_g, Ws_g, cs2, nu, alpha, star, gas_boundary, gas_floor);   
     for (int i=0; i<g.NR + 2*g.Nghost; i++) {
         for (int j=0; j<g.Nphi + 2*g.Nghost; j++) {
             alpha2D(i,j) = alpha;
@@ -286,7 +289,10 @@ int main() {
     Sources src(T, Ws_g, sizes, floor, M_star, mu);
     DustDynamics dyn(D, cs, src, 0.4, 0.2, floor, gas_floor);
 
-    double dt_CFL = dyn.get_CFL_limit(g, Ws_d, Ws_g);
+    SourcesGas srcg(gas_floor, M_star, mu) ;
+    GasDynamics dyng(srcg, cs, 0.4, 0.2, gas_floor) ;
+
+    double dt_CFL = std::min(dyn.get_CFL_limit(g, Ws_g), dyn.get_CFL_limit(g, Ws_d, Ws_g)) ;
 
     std::cout << dt_CFL << "\n";
 
@@ -295,6 +301,7 @@ int main() {
     int boundary = BoundaryFlags::open_R_inner | BoundaryFlags::open_R_outer | BoundaryFlags::open_Z_outer;
 
     dyn.set_boundaries(boundary);
+    dyng.set_boundaries(boundary);
 
     std::chrono::_V2::system_clock::time_point start,stop;
     start = std::chrono::high_resolution_clock::now();
@@ -361,9 +368,11 @@ int main() {
 
             // Gas updates
 
-            update_gas_sigma(g, Sig_g, dt, nu, gas_boundary, gas_floor);
-            compute_hydrostatic_equilibrium(star, g, Ws_g, cs2, Sig_g, Ws_d, gas_floor);
-            calc_gas_velocities(g, Sig_g, Ws_g, cs2, nu, alpha, star, gas_boundary, gas_floor);  
+            dyng()
+
+            // update_gas_sigma(g, Sig_g, dt, nu, gas_boundary, gas_floor);
+            // compute_hydrostatic_equilibrium(star, g, Ws_g, cs2, Sig_g, Ws_d, gas_floor);
+            // calc_gas_velocities(g, Sig_g, Ws_g, cs2, nu, alpha, star, gas_boundary, gas_floor);  
             compute_D(g, D, Ws_g, cs2, M_star, alpha, 1.);
 
             // Coagulation update when 1 internal coagulation time-step has passed in the global simulation time
@@ -382,9 +391,10 @@ int main() {
 
             if (count < 1000) {
                 dt_CFL = std::min(dyn.get_CFL_limit(g, Ws_d, Ws_g), 1.025*dt); // Calculate new CFL condition time-step 
+                dt_CFL = std::min(dt_CFL, dyng.get_CFL_limit(g, Ws_g))
             }
             else {
-                dt_CFL = dyn.get_CFL_limit(g, Ws_d, Ws_g);
+                dt_CFL = std::min(dyng.get_CFL_limit(g, Ws_g), dyn.get_CFL_limit(g, Ws_d, Ws_g));
             }
                 
             // Uncomment this section for writing restart files for jobs on clusters that need to be re-batched after a certain amount of time; here a restart file is written after 20 hrs

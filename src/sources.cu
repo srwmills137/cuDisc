@@ -5,6 +5,7 @@
 #include "field.h"
 #include "cuda_array.h"
 #include "dustdynamics.h"
+#include "gasdynamics.h"
 #include "constants.h"
 #include "sources.h"
 #include "drag_const.h"
@@ -12,6 +13,80 @@
 #include "coagulation/size_grid.h"
 
 // Simple Scheme
+
+__device__
+double _vl_slope(double dQF, double dQB, double cF, double cB) {
+
+    if (dQF*dQB > 0.) {
+        double v = dQB/dQF ;
+        return dQB * (cF*v + cB) / (v*v + (cF + cB - 2)*v + 1.) ;
+    } 
+    else {
+        return 0. ;
+    }
+}
+
+__device__
+double vl_r2D(GridRef& g, FieldConstRef<double>& Qty, int i, int j) {
+
+    double rc = (g.rc(i,j));
+
+    double cF = ((g.rc(i+1,j)) - rc) / ((g.re(i+1,j))-rc) ;
+    double cB = ((g.rc(i-1,j)) - rc) / ((g.re(i,j))-rc) ;
+
+    double dQF = (Qty(i+1, j) - Qty(i, j)) / ((g.rc(i+1,j)) - rc) ;
+    double dQB = (Qty(i-1, j) - Qty(i, j)) / ((g.rc(i-1,j)) - rc) ;
+
+    return _vl_slope(dQF, dQB, cF, cB) ;
+}
+
+__device__
+double vl_Z2D(GridRef& g, FieldConstRef<double>& Qty, int i, int j) {
+
+    double Zc = g.Zc(i,j);
+
+    double cF = (g.Zc(i,j+1) - Zc) / (g.Ze(i,j+1)-Zc) ;
+    double cB = (g.Zc(i,j-1) - Zc) / (g.Ze(i,j)-Zc) ;
+
+    double dQF = (Qty(i, j+1) - Qty(i, j)) / (g.Zc(i,j+1) - Zc) ;
+    double dQB = (Qty(i, j-1) - Qty(i, j)) / (g.Zc(i,j-1) - Zc) ;
+
+    return _vl_slope(dQF, dQB, cF, cB) ;
+}
+
+__device__
+double vl_R2D(GridRef& g, FieldConstRef<double>& Qty, int i, int j) {
+    return (vl_r2D(g, Qty, i, j) - g.sin_th_c(j) * vl_Z2D(g, Qty, i, j)) / g.cos_th_c(j) ;
+}
+
+__global__
+double _calc_T(GridRef& g, FieldRef<Prims>& wg, FieldRef<double> TRphi, FieldRef<double> TZphi, FieldRef<double> vphi, double* nu, int nbuffer) {
+    int iidx = threadIdx.x + blockIdx.x*blockDim.x ;
+    int jidx = threadIdx.y + blockIdx.y*blockDim.y ;
+    int istride = gridDim.x * blockDim.x ;
+    int jstride = gridDim.y * blockDim.y ;
+
+    for (int i=iidx; i<g.NR+2*g.Nghost; i+=istride) {
+        for (int j=jidx; j<g.Nphi+2*g.Nghost; j+=jstride) {
+            TRphi(i,j) = wg(i,j).rho * nu[i] * (vl_R2D(g, vphi, i, j) - vphi(i,j) / g.Rc(i)) ;
+            TZphi(i,j) = wg(i,j).rho * nu[i] * vl_Z2D(g, vphi, i, j) ;
+        }
+    }
+}
+
+__global__
+double _calc_pressure(GridRef& g, FieldRef<Prims> wg, FieldConstRef<double> cs, FieldRef<double> p) {
+    int iidx = threadIdx.x + blockIdx.x*blockDim.x ;
+    int jidx = threadIdx.y + blockIdx.y*blockDim.y ;
+    int istride = gridDim.x * blockDim.x ;
+    int jstride = gridDim.y * blockDim.y ;
+
+    for (int i=iidx; i<g.NR+2*g.Nghost; i+=istride) {
+        for (int j=jidx; j<g.Nphi+2*g.Nghost; j+=jstride) {
+            p(i,j) = wg(i, j).rho * cs(i, j) * cs(i, j) ;
+        }
+    }
+}
 
 __device__
 double OmK2(GridRef& g, double Mstar, int i, int j) {
@@ -71,6 +146,27 @@ void _source_curv_grav_pressure(GridRef g, Field3DRef<Prims> w, Field3DRef<Quant
 
                 }
             }
+        }
+    }
+}
+
+__global__
+void _source_curv_grav_pres_visc(GridRef g, FieldRef<Quants> u, FieldRef<Prims> wg, double dt, double Mstar, FieldRef<double> p,  FieldRef<double> TRphi, FieldRef<double> TZphi, FieldRef<double> vphi, double floor) {
+    int iidx = threadIdx.x + blockIdx.x*blockDim.x ;
+    int jidx = threadIdx.y + blockIdx.y*blockDim.y ;
+    int istride = gridDim.x * blockDim.x ;
+    int jstride = gridDim.y * blockDim.y ;
+
+    for (int i=iidx; i<g.NR+2*g.Nghost; i+=istride) {
+        for (int j=jidx; j<g.Nphi+2*g.Nghost; j+=jstride) {
+
+            double f1 = -vl_R2D(g, p, i, j) + wg(i,j).rho*wg(i,j).v_phi*wg(i,j).v_phi/g.Rc(i) - wg(i,j).rho*OmK2(g, Mstar, i, j)*g.Rc(i) ;
+            double f2 = 2*TRphi(i,j) + g.Rc(i)*vl_R2D(g, TRphi, i, j) + g.Rc(i)*vl_Z2D(g, TZphi, i, j) ;
+            double f3 = -vl_Z2D(g, p, i, j) - wg(i,j).rho*OmK2(g, Mstar, i, j)*g.Zc(i,j) ;
+
+            u(i,j).mom_R += dt * f1 ;
+            u(i,j).amom_phi += dt * f2 ;
+            u(i,j).mom_Z += dt * f3 ;
         }
     }
 }
@@ -184,7 +280,27 @@ void SourcesRad<use_full_stokes>::source_imp(Grid& g, Field3D<Prims>& w, double 
     _source_drag<<<blocks,threads>>>(g, w, _w_gas, t_stop, dt, _Mstar);
 }
 
+template<bool use_full_stokes>
+void SourcesGas<use_full_stokes>::source_exp(Grid& g, Field<Prims>& w_g, Field<Quants>& u, double* nu, FieldConstRef<double> cs, double dt) {
+    Field<double> Trphi = create_field<double>(g);
+    Field<double> TZphi = create_field<double>(g);
+    Field<double> p = create_field<double>(g);
+    Field<double> vphi = create_field<double>(g);
+    
+    dim3 threads(16,8,8);
+    dim3 blocks((g.NR + 2*g.Nghost+15)/16,(g.Nphi + 2*g.Nghost+7)/8, (u.Nd+7)/8) ;
+
+    // find pressure
+    _calc_pressure<<<blocks,threads>>>(g, w_g, cs, p) ;
+    // calculate the stress tensor components
+    _calc_T<<<blocks,threads>>>() ;
+    // compute the total source terms
+    _source_curv_grav_pres_visc<<<blocks,threads>>>(g, u, wg, dt, _Mstar, p, TRphi, TZphi, vphi, _floor);
+}
+
 template class Sources<true>;
 template class Sources<false>;
 template class SourcesRad<true>;
 template class SourcesRad<false>;
+template class SourcesGas<true>;
+template class SourcesGas<false>;
