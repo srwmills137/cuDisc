@@ -14,6 +14,7 @@
 
 // Simple Scheme
 
+// Compute Van Leer limited slope for derivative functions
 __device__
 double _vl_slope(double dQF, double dQB, double cF, double cB) {
 
@@ -26,8 +27,9 @@ double _vl_slope(double dQF, double dQB, double cF, double cB) {
     }
 }
 
+// Compute r derivative
 __device__
-double vl_r2D(GridRef& g, FieldConstRef<double>& Qty, int i, int j) {
+double vl_r2D(GridRef& g, FieldRef<double>& Qty, int i, int j) {
 
     double rc = (g.rc(i,j));
 
@@ -40,8 +42,9 @@ double vl_r2D(GridRef& g, FieldConstRef<double>& Qty, int i, int j) {
     return _vl_slope(dQF, dQB, cF, cB) ;
 }
 
+// compute Z derivative
 __device__
-double vl_Z2D(GridRef& g, FieldConstRef<double>& Qty, int i, int j) {
+double vl_Z2D(GridRef& g, FieldRef<double>& Qty, int i, int j) {
 
     double Zc = g.Zc(i,j);
 
@@ -54,13 +57,15 @@ double vl_Z2D(GridRef& g, FieldConstRef<double>& Qty, int i, int j) {
     return _vl_slope(dQF, dQB, cF, cB) ;
 }
 
+// compute R derivative
 __device__
-double vl_R2D(GridRef& g, FieldConstRef<double>& Qty, int i, int j) {
+double vl_R2D(GridRef& g, FieldRef<double>& Qty, int i, int j) {
     return (vl_r2D(g, Qty, i, j) - g.sin_th_c(j) * vl_Z2D(g, Qty, i, j)) / g.cos_th_c(j) ;
 }
 
+// compute TRphi and TZphi components of the stress tensor field
 __global__
-double _calc_T(GridRef& g, FieldRef<Prims>& wg, FieldRef<double> TRphi, FieldRef<double> TZphi, FieldRef<double> vphi, double* nu, int nbuffer) {
+void _calc_T(GridRef g, FieldRef<Prims> wg, FieldRef<double> TRphi, FieldRef<double> TZphi, FieldRef<double> vphi, double* nu) {
     int iidx = threadIdx.x + blockIdx.x*blockDim.x ;
     int jidx = threadIdx.y + blockIdx.y*blockDim.y ;
     int istride = gridDim.x * blockDim.x ;
@@ -74,8 +79,9 @@ double _calc_T(GridRef& g, FieldRef<Prims>& wg, FieldRef<double> TRphi, FieldRef
     }
 }
 
+// calculate the pressure field
 __global__
-double _calc_pressure(GridRef& g, FieldRef<Prims> wg, FieldConstRef<double> cs, FieldRef<double> p) {
+void _calc_pressure(GridRef g, FieldRef<Prims> wg, FieldConstRef<double> cs, FieldRef<double> p) {
     int iidx = threadIdx.x + blockIdx.x*blockDim.x ;
     int jidx = threadIdx.y + blockIdx.y*blockDim.y ;
     int istride = gridDim.x * blockDim.x ;
@@ -88,6 +94,22 @@ double _calc_pressure(GridRef& g, FieldRef<Prims> wg, FieldConstRef<double> cs, 
     }
 }
 
+// upload the phi component of velocity into a Field
+__global__
+void _get_vphi(GridRef g, FieldRef<Prims> wg, FieldRef<double> vphi) {
+    int iidx = threadIdx.x + blockIdx.x*blockDim.x ;
+    int jidx = threadIdx.y + blockIdx.y*blockDim.y ;
+    int istride = gridDim.x * blockDim.x ;
+    int jstride = gridDim.y * blockDim.y ;
+
+    for (int i=iidx; i<g.NR+2*g.Nghost; i+=istride) {
+        for (int j=jidx; j<g.Nphi+2*g.Nghost; j+=jstride) {
+            vphi(i,j) = wg(i, j).v_phi ;
+        }
+    }
+}
+
+// Computes the Keplerian angluar velocity squared
 __device__
 double OmK2(GridRef& g, double Mstar, int i, int j) {
 
@@ -95,6 +117,7 @@ double OmK2(GridRef& g, double Mstar, int i, int j) {
 
 }
 
+// Computes the source terms from curvature and gravtiy (for dust)
 __global__
 void _source_curv_grav(GridRef g, Field3DRef<Prims> w, Field3DRef<Quants> u, FieldConstRef<Prims> wg, double dt, double Mstar, double floor) {
 
@@ -122,6 +145,7 @@ void _source_curv_grav(GridRef g, Field3DRef<Prims> w, Field3DRef<Quants> u, Fie
     }
 }
 
+// Computes the source terms from curvature, gravity, and radiative pressure (for dust)
 __global__
 void _source_curv_grav_pressure(GridRef g, Field3DRef<Prims> w, Field3DRef<Quants> u, FieldConstRef<Prims> wg, Field3DConstRef<double> f_rad, double dt, double Mstar, double floor) {
 
@@ -150,6 +174,7 @@ void _source_curv_grav_pressure(GridRef g, Field3DRef<Prims> w, Field3DRef<Quant
     }
 }
 
+// Computes the source terms from curvature, gravity, pressure, and viscosity (for gas)
 __global__
 void _source_curv_grav_pres_visc(GridRef g, FieldRef<Quants> u, FieldRef<Prims> wg, double dt, double Mstar, FieldRef<double> p,  FieldRef<double> TRphi, FieldRef<double> TZphi, FieldRef<double> vphi, double floor) {
     int iidx = threadIdx.x + blockIdx.x*blockDim.x ;
@@ -171,6 +196,7 @@ void _source_curv_grav_pres_visc(GridRef g, FieldRef<Quants> u, FieldRef<Prims> 
     }
 }
 
+// Computes the drag force from the gas onto the dust
 __global__
 void _source_drag(GridRef g, Field3DRef<Prims> w, FieldConstRef<Prims> w_gas, Field3DConstRef<double> t_stop, double dt, double Mstar) {
 
@@ -210,6 +236,7 @@ void _source_drag(GridRef g, Field3DRef<Prims> w, FieldConstRef<Prims> w_gas, Fi
 
 }
 
+// Computes the stopping time for the dust
 template<bool full_stokes>
 __global__
 void _calc_t_s(GridRef g, Field3DConstRef<Prims> q, FieldConstRef<Prims> w_gas, FieldConstRef<double> T, 
@@ -232,6 +259,7 @@ void _calc_t_s(GridRef g, Field3DConstRef<Prims> q, FieldConstRef<Prims> w_gas, 
     }
 }
 
+// Computes explicit source terms for dust
 template<bool use_full_stokes>
 void Sources<use_full_stokes>::source_exp(Grid& g, Field3D<Prims>& w, Field3D<Quants>& u, double dt) {
 
@@ -241,6 +269,7 @@ void Sources<use_full_stokes>::source_exp(Grid& g, Field3D<Prims>& w, Field3D<Qu
     _source_curv_grav<<<blocks,threads>>>(g, w, u, _w_gas, dt, _Mstar, _floor);
 }
 
+// Computes implicit source terms for dust
 template<bool use_full_stokes>
 void Sources<use_full_stokes>::source_imp(Grid& g, Field3D<Prims>& w, double dt) {
 
@@ -256,6 +285,7 @@ void Sources<use_full_stokes>::source_imp(Grid& g, Field3D<Prims>& w, double dt)
     _source_drag<<<blocks,threads>>>(g, w, _w_gas, t_stop, dt, _Mstar);
 }
 
+// Computes explicit source terms for dust with radiative pressure on
 template<bool use_full_stokes>
 void SourcesRad<use_full_stokes>::source_exp(Grid& g, Field3D<Prims>& w, Field3D<Quants>& u, double dt) {
 
@@ -265,6 +295,7 @@ void SourcesRad<use_full_stokes>::source_exp(Grid& g, Field3D<Prims>& w, Field3D
     _source_curv_grav_pressure<<<blocks,threads>>>(g, w, u, _w_gas, _f_rad, dt, _Mstar, _floor);
 }
 
+// Computes implicit source terms for dust with radiative pressure on
 template<bool use_full_stokes>
 void SourcesRad<use_full_stokes>::source_imp(Grid& g, Field3D<Prims>& w, double dt) {
 
@@ -280,22 +311,24 @@ void SourcesRad<use_full_stokes>::source_imp(Grid& g, Field3D<Prims>& w, double 
     _source_drag<<<blocks,threads>>>(g, w, _w_gas, t_stop, dt, _Mstar);
 }
 
+// Computes explicit source terms for gas
 template<bool use_full_stokes>
 void SourcesGas<use_full_stokes>::source_exp(Grid& g, Field<Prims>& w_g, Field<Quants>& u, double* nu, FieldConstRef<double> cs, double dt) {
-    Field<double> Trphi = create_field<double>(g);
+    Field<double> TRphi = create_field<double>(g);
     Field<double> TZphi = create_field<double>(g);
     Field<double> p = create_field<double>(g);
     Field<double> vphi = create_field<double>(g);
     
     dim3 threads(16,8,8);
-    dim3 blocks((g.NR + 2*g.Nghost+15)/16,(g.Nphi + 2*g.Nghost+7)/8, (u.Nd+7)/8) ;
+    dim3 blocks((g.NR + 2*g.Nghost+15)/16,(g.Nphi + 2*g.Nghost+7)/8, 1) ;
 
+    _get_vphi<<<blocks,threads>>>(g, w_g, vphi) ;
     // find pressure
     _calc_pressure<<<blocks,threads>>>(g, w_g, cs, p) ;
     // calculate the stress tensor components
-    _calc_T<<<blocks,threads>>>() ;
+    _calc_T<<<blocks,threads>>>(g, w_g, TRphi, TZphi, vphi, nu) ;
     // compute the total source terms
-    _source_curv_grav_pres_visc<<<blocks,threads>>>(g, u, wg, dt, _Mstar, p, TRphi, TZphi, vphi, _floor);
+    _source_curv_grav_pres_visc<<<blocks,threads>>>(g, u, w_g, dt, _Mstar, p, TRphi, TZphi, vphi, _floor);
 }
 
 template class Sources<true>;

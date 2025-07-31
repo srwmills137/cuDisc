@@ -167,7 +167,7 @@ Quants construct_fluxes(double v_l, double v_r, double v_av, double w_l[4], doub
 }
 
 __device__ __host__ inline
-void dust_fluxR(GridRef& g, FieldConstRef<Prims>& w_g, int i, int j, FieldRef<Quants>& fluxR) {
+void gas_fluxR(GridRef& g, FieldConstRef<Prims>& w_g, int i, int j, FieldRef<Quants>& fluxR) {
 
     double normR = g.face_normal_R(i,j).R;
     double normZ = g.face_normal_R(i,j).Z;
@@ -192,13 +192,13 @@ void dust_fluxR(GridRef& g, FieldConstRef<Prims>& w_g, int i, int j, FieldRef<Qu
 }
 
 __device__ __host__ inline
-void dust_fluxZ(GridRef& g, FieldConstRef<Prims>& w_g, int i, int j, FieldRef<Quants>& fluxZ) {
+void gas_fluxZ(GridRef& g, FieldConstRef<Prims>& w_g, int i, int j, FieldRef<Quants>& fluxZ) {
 
     double normR = g.face_normal_Z(i,j).R;
     double normZ = g.face_normal_Z(i,j).Z;
 
-    double w_l[4] = {w_g(i,j-1).rho, w_g(i,j-1,k).v_R, w_g(i,j-1).v_phi, w_g(i,j-1).v_Z};
-    double w_r[4] = {w_g(i,j).rho, w_g(i,j,k).v_R, w_g(i,j).v_phi, w_g(i,j).v_Z};  
+    double w_l[4] = {w_g(i,j-1).rho, w_g(i,j-1).v_R, w_g(i,j-1).v_phi, w_g(i,j-1).v_Z};
+    double w_r[4] = {w_g(i,j).rho, w_g(i,j).v_R, w_g(i,j).v_phi, w_g(i,j).v_Z};  
 
     w_l[2] *= g.Rc(i) ;
     w_r[2] *= g.Rc(i) ;
@@ -224,8 +224,8 @@ __global__ void _calc_donor_flux(GridRef g, FieldConstRef<Prims> w_gas,
 
     for (int i=iidx+g.Nghost; i<g.NR+g.Nghost+1; i+=istride) {
         for (int j=jidx+g.Nghost; j<g.Nphi+g.Nghost+1; j+=jstride) {
-            dust_fluxR(g, w_gas, i, j, fluxR);
-            dust_fluxZ(g, w_gas, i, j, fluxZ); 
+            gas_fluxR(g, w_gas, i, j, fluxR);
+            gas_fluxZ(g, w_gas, i, j, fluxZ); 
         }
     }
 
@@ -269,18 +269,18 @@ __global__ void _update_quants(GridRef g, FieldRef<Quants> q_mids, FieldRef<Quan
 }
 
 __device__ __host__ inline
-void dust_flux_vlR(GridRef& g, FieldConstRef<Prims>& w_g, int i, int j, FieldRef<Quants>& fluxR) {
+void gas_flux_vlR(GridRef& g, FieldConstRef<Prims>& w_g, int i, int j, FieldRef<Quants>& fluxR) {
 
     double normR = g.face_normal_R(i,j).R;
     double normZ = g.face_normal_R(i,j).Z;
     double dR_l = g.Re(i)-g.Rc(i-1);
     double dR_r = g.Re(i)-g.Rc(i);
 
-    double w_l[4] = {w_g(i-1,j).rho + vl_R(g,w,i-1,j,0)*dR_l, w_g(i-1,j).v_R + vl_R(g,w,i-1,j,1)*dR_l, 
-                w_g(i-1,j).v_phi + vl_R(g,w,i-1,j,2)*dR_l, w_g(i-1,j).v_Z + vl_R(g,w,i-1,j,3)*dR_l};
+    double w_l[4] = {w_g(i-1,j).rho + vl_R(g,w_g,i-1,j,0)*dR_l, w_g(i-1,j).v_R + vl_R(g,w_g,i-1,j,1)*dR_l, 
+                w_g(i-1,j).v_phi + vl_R(g,w_g,i-1,j,2)*dR_l, w_g(i-1,j).v_Z + vl_R(g,w_g,i-1,j,3)*dR_l};
 
-    double w_r[4] = {w(i,j).rho + vl_R(g,w,i,j,0)*dR_r, w_g(i,j).v_R + vl_R(g,w,i,j,1)*dR_r, 
-                w(i,j).v_phi + vl_R(g,w,i,j,2)*dR_r, w_g(i,j).v_Z + vl_R(g,w,i,j,3)*dR_r};
+    double w_r[4] = {w_g(i,j).rho + vl_R(g,w_g,i,j,0)*dR_r, w_g(i,j).v_R + vl_R(g,w_g,i,j,1)*dR_r, 
+                w_g(i,j).v_phi + vl_R(g,w_g,i,j,2)*dR_r, w_g(i,j).v_Z + vl_R(g,w_g,i,j,3)*dR_r};
 
     w_l[2] *= g.Re(i) ;
     w_r[2] *= g.Re(i) ;
@@ -299,18 +299,18 @@ void dust_flux_vlR(GridRef& g, FieldConstRef<Prims>& w_g, int i, int j, FieldRef
 }
 
 __device__ __host__ inline
-void dust_flux_vlZ(GridRef& g, FieldConstRef<Prims>& w_g, int i, int j, FieldRef<Quants>& fluxZ) {
+void gas_flux_vlZ(GridRef& g, const FieldConstRef<Prims>& w_g, int i, int j, FieldRef<Quants>& fluxZ) {
 
     double normR = g.face_normal_Z(i,j).R;
     double normZ = g.face_normal_Z(i,j).Z;
     double dZ_l = g.Ze(i,j)-g.Zc(i,j-1);
     double dZ_r = g.Ze(i,j)-g.Zc(i,j);
 
-    double w_l[4] = {w(i,j-1,k).rho + vl_Z(g,w,i,j-1,k,0)*dZ_l, w(i,j-1,k).v_R + vl_Z(g,w,i,j-1,k,1)*dZ_l, 
-                w(i,j-1,k).v_phi + vl_Z(g,w,i,j-1,k,2)*dZ_l, w(i,j-1,k).v_Z + vl_Z(g,w,i,j-1,k,3)*dZ_l};
+    double w_l[4] = {w_g(i,j-1).rho + vl_Z(g,w_g,i,j-1,0)*dZ_l, w_g(i,j-1).v_R + vl_Z(g,w_g,i,j-1,1)*dZ_l, 
+                w_g(i,j-1).v_phi + vl_Z(g,w_g,i,j-1,2)*dZ_l, w_g(i,j-1).v_Z + vl_Z(g,w_g,i,j-1,3)*dZ_l};
 
-    double w_r[4] = {w(i,j,k).rho + vl_Z(g,w,i,j,k,0)*dZ_r, w(i,j,k).v_R + vl_Z(g,w,i,j,k,1)*dZ_r, 
-                w(i,j,k).v_phi + vl_Z(g,w,i,j,k,2)*dZ_r, w(i,j,k).v_Z + vl_Z(g,w,i,j,k,3)*dZ_r};
+    double w_r[4] = {w_g(i,j).rho + vl_Z(g,w_g,i,j,0)*dZ_r, w_g(i,j).v_R + vl_Z(g,w_g,i,j,1)*dZ_r, 
+                w_g(i,j).v_phi + vl_Z(g,w_g,i,j,2)*dZ_r, w_g(i,j).v_Z + vl_Z(g,w_g,i,j,3)*dZ_r};
 
 
     w_l[2] *= g.Rc(i) ;
@@ -326,12 +326,10 @@ void dust_flux_vlZ(GridRef& g, FieldConstRef<Prims>& w_g, int i, int j, FieldRef
 
     // Construct fluxes depending on sign of interface velocities
 
-    fluxZ(i,j,k) = construct_fluxes(v_l, v_r, v_av, w_l, w_r);
-    if(do_diffusion)
-        add_diffive_fluxes(w_l, w_r, fluxZ(i,j,k), diff_fluxZ);
+    fluxZ(i,j) = construct_fluxes(v_l, v_r, v_av, w_l, w_r);
 }
 
-__global__ void _calc_flux_vl(GridRef g, FieldRef<Prims> w_gas, Field3DRef<Quants> fluxR, Field3DRef<Quants> fluxZ) {
+__global__ void _calc_flux_vl(GridRef g, FieldRef<Prims> w_gas, FieldRef<Quants> fluxR, FieldRef<Quants> fluxZ) {
 
     int iidx = threadIdx.x + blockIdx.x*blockDim.x ;
     int jidx = threadIdx.y + blockIdx.y*blockDim.y ;
@@ -340,8 +338,8 @@ __global__ void _calc_flux_vl(GridRef g, FieldRef<Prims> w_gas, Field3DRef<Quant
 
     for (int i=iidx+g.Nghost; i<g.NR+g.Nghost+1; i+=istride) {
         for (int j=jidx+g.Nghost; j<g.Nphi+g.Nghost+1; j+=jstride) {
-                dust_flux_vlR(g, w_gas, i, j, fluxR);
-                dust_flux_vlZ(g, w_gas, i, j, fluxZ); 
+                gas_flux_vlR(g, w_gas, i, j, fluxR);
+                gas_flux_vlZ(g, w_gas, i, j, fluxZ); 
         }
     }
 
@@ -410,11 +408,11 @@ void GasDynamics::operator() (Grid& g, Field<Prims>& w_gas, const CudaArray<doub
     if (g.Nghost < 2)
         throw std::invalid_argument("Gas dynamics requires at least 2 ghost cells") ;
 
-    Field3D<Quants> q_mids = Field<Quants>(g.NR+2*g.Nghost, g.Nphi+2*g.Nghost);
-    Field3D<Quants> q = Field<Quants>(g.NR+2*g.Nghost, g.Nphi+2*g.Nghost);
+    Field<Quants> q_mids = Field<Quants>(g.NR+2*g.Nghost, g.Nphi+2*g.Nghost);
+    Field<Quants> q = Field<Quants>(g.NR+2*g.Nghost, g.Nphi+2*g.Nghost);
 
-    Field3D<Quants> fluxR = Field<Quants>(g.NR+2*g.Nghost, g.Nphi+2*g.Nghost);
-    Field3D<Quants> fluxZ = Field<Quants>(g.NR+2*g.Nghost, g.Nphi+2*g.Nghost);
+    Field<Quants> fluxR = Field<Quants>(g.NR+2*g.Nghost, g.Nphi+2*g.Nghost);
+    Field<Quants> fluxZ = Field<Quants>(g.NR+2*g.Nghost, g.Nphi+2*g.Nghost);
 
     dim3 threads(16,8,4) ;
     dim3 blocks((g.NR + 2*g.Nghost+15)/16,(g.Nphi + 2*g.Nghost+7)/8, 1) ;
@@ -434,11 +432,11 @@ void GasDynamics::operator() (Grid& g, Field<Prims>& w_gas, const CudaArray<doub
     check_CUDA_errors("_set_boundary_flux") ;
     _update_quants<<<blocks,threads>>>(g, q_mids, q, dt/2., fluxR, fluxZ);
     check_CUDA_errors("_update_quants") ;
-    _sources.source_exp(g, w_dust, q_mids, _cs, nu, dt/2.);
-    _calc_prim<<<blocks,threads>>>(g, q_mids, w_dust);
+    _sources.source_exp(g, w_gas, q_mids, _cs, nu, dt/2.);
+    _calc_prim<<<blocks,threads>>>(g, q_mids, w_gas);
     check_CUDA_errors("_calc_prim") ; 
     
-    _set_boundaries<<<blocks,threads>>>(g, w_dust, _boundary, _floor);
+    _set_boundaries<<<blocks,threads>>>(g, w_gas, _boundary, _floor);
     check_CUDA_errors("_set_boundaries") ;
 
     // Compute fluxes with Van Leer
@@ -452,8 +450,8 @@ void GasDynamics::operator() (Grid& g, Field<Prims>& w_gas, const CudaArray<doub
     // set_flux_to_zero<<<blocks,threads>>>(g, fluxR);
     _update_quants<<<blocks,threads>>>(g, q_mids, q, dt, fluxR, fluxZ);
     check_CUDA_errors("_update_quants") ;
-    _sources.source_exp(g, w_dust, q_mids, _cs, nu, dt);
-    _calc_prim<<<blocks, threads>>>(g, q_mids, w_dust);
+    _sources.source_exp(g, w_gas, q_mids, _cs, nu, dt);
+    _calc_prim<<<blocks, threads>>>(g, q_mids, w_gas);
     check_CUDA_errors("_calc_prim") ; 
 }
 

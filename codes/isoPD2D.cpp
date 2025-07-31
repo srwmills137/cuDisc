@@ -162,11 +162,11 @@ int main() {
     // Set up spatial grid 
 
     Grid::params p;
-    p.NR = 500;
-    p.Nphi = 100;
+    p.NR = 50;
+    p.Nphi = 1;
     p.Nghost = 2;
 
-    p.Rmin = 5.*au;
+    p.Rmin = 1.*au;
     //p.R_power = 0.5;
     p.Rmax = 1000.*au;
 
@@ -289,8 +289,8 @@ int main() {
     Sources src(T, Ws_g, sizes, floor, M_star, mu);
     DustDynamics dyn(D, cs, src, 0.4, 0.2, floor, gas_floor);
 
-    SourcesGas srcg(gas_floor, M_star, mu) ;
-    GasDynamics dyng(srcg, cs, 0.4, 0.2, gas_floor) ;
+    SourcesGas srcgas(gas_floor, M_star, mu) ;
+    GasDynamics dyngas(srcgas, cs, 0.4, 0.2, gas_floor) ;
 
     double dt_CFL = std::min(dyn.get_CFL_limit(g, Ws_g), dyn.get_CFL_limit(g, Ws_d, Ws_g)) ;
 
@@ -301,7 +301,7 @@ int main() {
     int boundary = BoundaryFlags::open_R_inner | BoundaryFlags::open_R_outer | BoundaryFlags::open_Z_outer;
 
     dyn.set_boundaries(boundary);
-    dyng.set_boundaries(boundary);
+    dyngas.set_boundaries(boundary);
 
     std::chrono::_V2::system_clock::time_point start,stop;
     start = std::chrono::high_resolution_clock::now();
@@ -368,7 +368,7 @@ int main() {
 
             // Gas updates
 
-            dyng()
+            dyngas(g, Ws_g, nu, dt)
 
             // update_gas_sigma(g, Sig_g, dt, nu, gas_boundary, gas_floor);
             // compute_hydrostatic_equilibrium(star, g, Ws_g, cs2, Sig_g, Ws_d, gas_floor);
@@ -391,10 +391,10 @@ int main() {
 
             if (count < 1000) {
                 dt_CFL = std::min(dyn.get_CFL_limit(g, Ws_d, Ws_g), 1.025*dt); // Calculate new CFL condition time-step 
-                dt_CFL = std::min(dt_CFL, dyng.get_CFL_limit(g, Ws_g))
+                dt_CFL = std::min(dt_CFL, dyngas.get_CFL_limit(g, Ws_g))
             }
             else {
-                dt_CFL = std::min(dyng.get_CFL_limit(g, Ws_g), dyn.get_CFL_limit(g, Ws_d, Ws_g));
+                dt_CFL = std::min(dyngas.get_CFL_limit(g, Ws_g), dyn.get_CFL_limit(g, Ws_d, Ws_g));
             }
                 
             // Uncomment this section for writing restart files for jobs on clusters that need to be re-batched after a certain amount of time; here a restart file is written after 20 hrs

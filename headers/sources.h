@@ -79,7 +79,7 @@ class SourcesGas : public SourcesBase {
         SourcesGas(double floor, double Mstar=1., double mu=2.4) :
             _floor(floor) {};
 
-        void source_exp(Grid& g, Field3D<Prims>& w, Field3D<Quants>& u, double dt);
+        void source_exp(Grid& g, Field<Prims>& w_g, Field<Quants>& u, double* nu, FieldConstRef<double> cs, double dt);
 
     private:
 
