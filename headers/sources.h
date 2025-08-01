@@ -79,7 +79,14 @@ class SourcesGas : public SourcesBase {
         SourcesGas(double floor, double Mstar=1., double mu=2.4) :
             _floor(floor) {};
 
-        void source_exp(Grid& g, Field<Prims>& w_g, Field<Quants>& u, double* nu, FieldConstRef<double> cs, double dt);
+        void source_exp(Grid& g, Field3D<Prims>& w_g, Field3D<Quants>& u, double dt) override {
+            Field<Prims> w_gf = Field<Prims>(w_g) ;
+            Field<Quants> uf = Field<Quants>(u) ;
+            source_exp_gas(g, w_gf, uf, nullptr, FieldConstRef<double>(uf.get().NR(), uf.get().NZ()), dt);
+        }
+
+        void source_exp_gas(Grid& g, Field<Prims>& w_g, Field<Quants>& u,
+                             double* nu, FieldConstRef<double> cs, double dt);
 
     private:
 

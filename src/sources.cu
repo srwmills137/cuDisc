@@ -313,7 +313,7 @@ void SourcesRad<use_full_stokes>::source_imp(Grid& g, Field3D<Prims>& w, double 
 
 // Computes explicit source terms for gas
 template<bool use_full_stokes>
-void SourcesGas<use_full_stokes>::source_exp(Grid& g, Field<Prims>& w_g, Field<Quants>& u, double* nu, FieldConstRef<double> cs, double dt) {
+void SourcesGas<use_full_stokes>::source_exp_gas(Grid& g, Field<Prims>& w_g, Field<Quants>& u, double* nu, FieldConstRef<double> cs, double dt) {
     Field<double> TRphi = create_field<double>(g);
     Field<double> TZphi = create_field<double>(g);
     Field<double> p = create_field<double>(g);

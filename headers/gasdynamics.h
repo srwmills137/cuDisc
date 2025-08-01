@@ -36,9 +36,9 @@ class GasDynamics {
         return _boundary ;
         }
 
-        void floor_above(Grid&g, Field3D<Prims>& w_dust, Field<Prims>& w_gas, CudaArray<double>& h);
+        void floor_above(Grid&g, Field<Prims>& w_dust, Field<Prims>& w_gas, CudaArray<double>& h);
 
-        void operator() (Grid& g, Field3D<Prims>& w_dust, const Field<Prims>& w_gas, double dt) ;
+        void operator() (Grid& g, Field<Prims>& w_gas, const CudaArray<double> nu, double dt) ;
 
         double get_CFL_limit(const Grid& g, const Field<Prims>& w_gas) ;
         double get_CFL_limit_debug(const Grid& g, const Field<Prims>& w_gas);

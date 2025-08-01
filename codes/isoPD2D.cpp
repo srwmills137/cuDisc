@@ -156,7 +156,7 @@ void cs2_to_cs(Grid& g, Field<double> &cs, Field<double> &cs2) {
 
 int main() {
 
-    std::filesystem::path dir = std::string("./codes/outputs/isoPD2D_gas_init");
+    std::filesystem::path dir = std::string("./codes/outputs/isoPD2D_1D_test");
     std::filesystem::create_directories(dir);
 
     // Set up spatial grid 

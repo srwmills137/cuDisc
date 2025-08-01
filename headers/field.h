@@ -25,10 +25,11 @@ template<typename T>
 class Field {
 
  public:
-   int stride ;
+    int NR, NZ ;
+    int stride ;
 
-   Field(int NR, int NZ, int block_size=-1)
-    {   
+    Field(int NR_, int NZ_, int block_size=-1)
+        : NR(NR_), NZ(NZ_) {   
         if (block_size < 0) { // Use a power of 2, up to 128 bytes
             block_size = 1 ; 
             int max_size = 128/sizeof(T) ;
@@ -40,6 +41,23 @@ class Field {
 
         _ptr = make_CudaArray<T>(NR * stride) ;
     }
+
+    
+    Field(const Field3D<T>& f3d, int k_slice=0) {
+        int NR = f3d.get().NR();
+        int NZ = f3d.get().NZ();
+
+        // Initialize this Field
+        stride = f3d.stride;
+        _ptr = make_CudaArray<T>(NR * stride);
+
+        for (int i = 0; i < NR; ++i) {
+            for (int j = 0; j < NZ; ++j) {
+                (*this)(i, j) = f3d(i, j, k_slice);
+            }
+        }
+    }
+
 
     int index(int i, int j) const {
         return i*stride + j ;
@@ -207,27 +225,24 @@ template<typename T>
 class Field3D {
 
  public:
-   int Nd ;
-   int stride_Zd ;
-   int stride_d ;
+   
+    int NR, NZ, Nd;
+    int stride_Zd, stride_d;
 
-
-
-   Field3D(int NR, int NZ, int Nd_, int block_size=-1)
-    {   
-        // Setup storage, padding the storage in phi to be a multiple of block_size:
-        Nd = Nd_;
-        if (block_size < 0) { // Use a power of 2, up to 128 bytes
-            block_size = 1 ; 
-            int max_size = 128/sizeof(T) ;
+    Field3D(int NR_, int NZ_, int Nd_, int block_size = -1)
+        : NR(NR_), NZ(NZ_), Nd(Nd_) {
+        if (block_size < 0) {
+            block_size = 1;
+            int max_size = 128 / sizeof(T);
             while (block_size < Nd && block_size < max_size)
-                block_size *= 2 ;
+                block_size *= 2;
         }
-        stride_d = block_size * ((Nd + block_size-1) / block_size) ;
-        stride_Zd = NZ * stride_d ;
+        stride_d = block_size * ((Nd + block_size - 1) / block_size);
+        stride_Zd = NZ * stride_d;
 
-       _ptr = make_CudaArray<T>(NR * stride_Zd) ;
+        _ptr = make_CudaArray<T>(NR * stride_Zd);
     }
+
 
     int index(int i, int j, int k) const {
         return i*stride_Zd + j*stride_d  + k ;

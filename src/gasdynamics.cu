@@ -18,6 +18,8 @@
 #include "van_leer.h"
 // Advection solver for gas
 
+// set up the boundary conditions based on the boundary flags
+__global__
 void _set_boundaries(GridRef g, FieldRef<Prims> w_g, int bound, double floor) {
 
     int iidx = threadIdx.x + blockIdx.x*blockDim.x ;
@@ -122,6 +124,8 @@ void _set_boundaries(GridRef g, FieldRef<Prims> w_g, int bound, double floor) {
     }
 }
 
+// compute the conserved quantities (density and momentum) from the primative quantities (density and velocity)
+__global__
 void _calc_conserved(GridRef g, FieldRef<Quants> q, FieldRef<Prims> w) {
 
     int iidx = threadIdx.x + blockIdx.x*blockDim.x ;
@@ -139,6 +143,7 @@ void _calc_conserved(GridRef g, FieldRef<Quants> q, FieldRef<Prims> w) {
     }
 }
 
+// construct the fluxes based on the velociteis, Roe averaged velocity, and velocities normal to cell faces
 __device__ __host__ inline
 Quants construct_fluxes(double v_l, double v_r, double v_av, double w_l[4], double w_r[4]) {
 
@@ -166,6 +171,7 @@ Quants construct_fluxes(double v_l, double v_r, double v_av, double w_l[4], doub
     }
 }
 
+// compute the radial donor cell gas flux
 __device__ __host__ inline
 void gas_fluxR(GridRef& g, FieldConstRef<Prims>& w_g, int i, int j, FieldRef<Quants>& fluxR) {
 
@@ -191,6 +197,7 @@ void gas_fluxR(GridRef& g, FieldConstRef<Prims>& w_g, int i, int j, FieldRef<Qua
     fluxR(i,j) = construct_fluxes(v_l, v_r, v_av, w_l, w_r);
 }
 
+// compute the vertical donor cell gas flux
 __device__ __host__ inline
 void gas_fluxZ(GridRef& g, FieldConstRef<Prims>& w_g, int i, int j, FieldRef<Quants>& fluxZ) {
 
@@ -214,6 +221,7 @@ void gas_fluxZ(GridRef& g, FieldConstRef<Prims>& w_g, int i, int j, FieldRef<Qua
     fluxZ(i,j) = construct_fluxes(v_l, v_r, v_av, w_l, w_r);
 }
 
+// compute the donor cell gas flux
 __global__ void _calc_donor_flux(GridRef g, FieldConstRef<Prims> w_gas,
                                 FieldRef<Quants> fluxR, FieldRef<Quants> fluxZ) {
 
@@ -231,6 +239,7 @@ __global__ void _calc_donor_flux(GridRef g, FieldConstRef<Prims> w_gas,
 
 }
 
+// compute the primative quantities from the conserved quantities
 __global__
 void _calc_prim(GridRef g, FieldRef<Quants> q, FieldRef<Prims> w) {
 
@@ -249,6 +258,7 @@ void _calc_prim(GridRef g, FieldRef<Quants> q, FieldRef<Prims> w) {
     }
 }
 
+// update conserved quantities from the fluxes
 __global__ void _update_quants(GridRef g, FieldRef<Quants> q_mids, FieldRef<Quants> q, double dt,
                                         FieldRef<Quants> fluxR, FieldRef<Quants> fluxZ) {
     
@@ -268,6 +278,7 @@ __global__ void _update_quants(GridRef g, FieldRef<Quants> q_mids, FieldRef<Quan
     }
 }
 
+// compute the radial van leer gas flux
 __device__ __host__ inline
 void gas_flux_vlR(GridRef& g, FieldConstRef<Prims>& w_g, int i, int j, FieldRef<Quants>& fluxR) {
 
@@ -298,8 +309,9 @@ void gas_flux_vlR(GridRef& g, FieldConstRef<Prims>& w_g, int i, int j, FieldRef<
     fluxR(i,j) = construct_fluxes(v_l, v_r, v_av, w_l, w_r);
 }
 
+// compute the vertical van leer gas flux
 __device__ __host__ inline
-void gas_flux_vlZ(GridRef& g, const FieldConstRef<Prims>& w_g, int i, int j, FieldRef<Quants>& fluxZ) {
+void gas_flux_vlZ(GridRef& g, FieldConstRef<Prims>& w_g, int i, int j, FieldRef<Quants>& fluxZ) {
 
     double normR = g.face_normal_Z(i,j).R;
     double normZ = g.face_normal_Z(i,j).Z;
@@ -329,7 +341,8 @@ void gas_flux_vlZ(GridRef& g, const FieldConstRef<Prims>& w_g, int i, int j, Fie
     fluxZ(i,j) = construct_fluxes(v_l, v_r, v_av, w_l, w_r);
 }
 
-__global__ void _calc_flux_vl(GridRef g, FieldRef<Prims> w_gas, FieldRef<Quants> fluxR, FieldRef<Quants> fluxZ) {
+// compute the van leer gas flux
+__global__ void _calc_flux_vl(GridRef g, FieldConstRef<Prims> w_gas, FieldRef<Quants> fluxR, FieldRef<Quants> fluxZ) {
 
     int iidx = threadIdx.x + blockIdx.x*blockDim.x ;
     int jidx = threadIdx.y + blockIdx.y*blockDim.y ;
@@ -345,6 +358,7 @@ __global__ void _calc_flux_vl(GridRef g, FieldRef<Prims> w_gas, FieldRef<Quants>
 
 }
 
+// compute the flux at the boundary cells
 __global__ void _set_boundary_flux(GridRef g, int bound, FieldRef<Quants> fluxR, FieldRef<Quants> fluxZ) {
 
     int iidx = threadIdx.x + blockIdx.x*blockDim.x ;
@@ -404,6 +418,7 @@ __global__ void _set_boundary_flux(GridRef g, int bound, FieldRef<Quants> fluxR,
 
 }
 
+// gas evolution operator
 void GasDynamics::operator() (Grid& g, Field<Prims>& w_gas, const CudaArray<double> nu, double dt) {
     if (g.Nghost < 2)
         throw std::invalid_argument("Gas dynamics requires at least 2 ghost cells") ;
@@ -424,7 +439,7 @@ void GasDynamics::operator() (Grid& g, Field<Prims>& w_gas, const CudaArray<doub
     check_CUDA_errors("_calc_conserved") ;
 
     // Calc donor cell flux
-    _calc_donor_flux<<<blocks,threads>>>(g, w_gas, _cs, fluxR, fluxZ);
+    _calc_donor_flux<<<blocks,threads>>>(g, w_gas, fluxR, fluxZ);
     check_CUDA_errors("_calc_donor_flux") ;
     
     // Update quantities a half time step and and source terms.
@@ -432,7 +447,7 @@ void GasDynamics::operator() (Grid& g, Field<Prims>& w_gas, const CudaArray<doub
     check_CUDA_errors("_set_boundary_flux") ;
     _update_quants<<<blocks,threads>>>(g, q_mids, q, dt/2., fluxR, fluxZ);
     check_CUDA_errors("_update_quants") ;
-    _sources.source_exp(g, w_gas, q_mids, _cs, nu, dt/2.);
+    _sources.source_exp_gas(g, w_gas, q_mids, nu, _cs, dt/2.);
     _calc_prim<<<blocks,threads>>>(g, q_mids, w_gas);
     check_CUDA_errors("_calc_prim") ; 
     
@@ -450,11 +465,12 @@ void GasDynamics::operator() (Grid& g, Field<Prims>& w_gas, const CudaArray<doub
     // set_flux_to_zero<<<blocks,threads>>>(g, fluxR);
     _update_quants<<<blocks,threads>>>(g, q_mids, q, dt, fluxR, fluxZ);
     check_CUDA_errors("_update_quants") ;
-    _sources.source_exp(g, w_gas, q_mids, _cs, nu, dt);
+    _sources.source_exp_gas(g, w_gas, q_mids, nu, _cs, dt);
     _calc_prim<<<blocks, threads>>>(g, q_mids, w_gas);
     check_CUDA_errors("_calc_prim") ; 
 }
 
+// compute the CFL timestep for each grid point
 __global__
 void _compute_CFL_diff(GridRef g, FieldConstRef<Prims> w_gas, FieldRef<double> CFL_grid,
                         double CFL_adv) {
@@ -479,6 +495,7 @@ void _compute_CFL_diff(GridRef g, FieldConstRef<Prims> w_gas, FieldRef<double> C
     } 
 }
 
+// wrapper function to compute the CFL timestep
 double GasDynamics::get_CFL_limit(const Grid& g, const Field<Prims>& w_gas) {
 
     dim3 threads(32,32) ;
@@ -487,7 +504,7 @@ double GasDynamics::get_CFL_limit(const Grid& g, const Field<Prims>& w_gas) {
     Field<double> CFL_grid = create_field<double>(g);
     set_all(g, CFL_grid, std::numeric_limits<double>::max());
 
-    _compute_CFL_diff<<<blocks,threads>>>(g,, w_gas, CFL_grid, _CFL_adv, _floor);
+    _compute_CFL_diff<<<blocks,threads>>>(g, w_gas, CFL_grid, _CFL_adv);
     check_CUDA_errors("_compute_CFL_diff") ;
     Reduction::scan_R_min(g, CFL_grid);
 
