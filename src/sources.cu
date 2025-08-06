@@ -16,7 +16,7 @@
 
 // Compute Van Leer limited slope for derivative functions
 __device__
-double _vl_slope(double dQF, double dQB, double cF, double cB) {
+double _vl_slope_gas(double dQF, double dQB, double cF, double cB) {
 
     if (dQF*dQB > 0.) {
         double v = dQB/dQF ;
@@ -39,7 +39,7 @@ double vl_r2D(GridRef& g, FieldRef<double>& Qty, int i, int j) {
     double dQF = (Qty(i+1, j) - Qty(i, j)) / ((g.rc(i+1,j)) - rc) ;
     double dQB = (Qty(i-1, j) - Qty(i, j)) / ((g.rc(i-1,j)) - rc) ;
 
-    return _vl_slope(dQF, dQB, cF, cB) ;
+    return _vl_slope_gas(dQF, dQB, cF, cB) ;
 }
 
 // compute Z derivative
@@ -54,7 +54,7 @@ double vl_Z2D(GridRef& g, FieldRef<double>& Qty, int i, int j) {
     double dQF = (Qty(i, j+1) - Qty(i, j)) / (g.Zc(i,j+1) - Zc) ;
     double dQB = (Qty(i, j-1) - Qty(i, j)) / (g.Zc(i,j-1) - Zc) ;
 
-    return _vl_slope(dQF, dQB, cF, cB) ;
+    return _vl_slope_gas(dQF, dQB, cF, cB) ;
 }
 
 // compute R derivative
@@ -65,7 +65,7 @@ double vl_R2D(GridRef& g, FieldRef<double>& Qty, int i, int j) {
 
 // compute TRphi and TZphi components of the stress tensor field
 __global__
-void _calc_T(GridRef g, FieldRef<Prims> wg, FieldRef<double> TRphi, FieldRef<double> TZphi, FieldRef<double> vphi, double* nu) {
+void _calc_T(GridRef g, FieldRef<Prims> wg, FieldRef<double> TRphi, FieldRef<double> TZphi, FieldRef<double> vphi, const double* nu) {
     int iidx = threadIdx.x + blockIdx.x*blockDim.x ;
     int jidx = threadIdx.y + blockIdx.y*blockDim.y ;
     int istride = gridDim.x * blockDim.x ;
@@ -313,7 +313,7 @@ void SourcesRad<use_full_stokes>::source_imp(Grid& g, Field3D<Prims>& w, double 
 
 // Computes explicit source terms for gas
 template<bool use_full_stokes>
-void SourcesGas<use_full_stokes>::source_exp_gas(Grid& g, Field<Prims>& w_g, Field<Quants>& u, double* nu, FieldConstRef<double> cs, double dt) {
+void SourcesGas<use_full_stokes>::source_exp(Grid& g, Field<Prims>& w_g, Field<Quants>& u, const double* nu, FieldConstRef<double> cs, double dt) {
     Field<double> TRphi = create_field<double>(g);
     Field<double> TZphi = create_field<double>(g);
     Field<double> p = create_field<double>(g);

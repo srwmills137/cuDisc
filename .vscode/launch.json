@@ -8,7 +8,7 @@
             "name": "CUDA C++: Launch",
             "type": "cuda-gdb",
             "request": "launch",
-            "program": "${workspaceFolder}/isoPD",
+            "program": "${workspaceFolder}/isoPD2D",
             "miDebuggerPath": "/opt/uw/cuda/12.3.2/bin/cuda-gdb",
             "environment": [
                 {

@@ -44,11 +44,11 @@ class Field {
 
     
     Field(const Field3D<T>& f3d, int k_slice=0) {
-        int NR = f3d.get().NR();
-        int NZ = f3d.get().NZ();
+        int NR = f3d.NR;
+        int NZ = f3d.NZ;
 
         // Initialize this Field
-        stride = f3d.stride;
+        stride = f3d.stride_Zd;
         _ptr = make_CudaArray<T>(NR * stride);
 
         for (int i = 0; i < NR; ++i) {

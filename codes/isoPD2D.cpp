@@ -6,6 +6,7 @@
 #include <chrono>
 
 #include "dustdynamics.h"
+#include "gasdynamics.h"
 #include "sources.h"
 #include "cuda_array.h"
 #include "grid.h"
@@ -54,7 +55,7 @@ void set_up_gas(Grid& g, CudaArray<double>& Sig_g, Field<Prims>& wg, CudaArray<d
             double Om2 = GMsun * Mstar / (g.Rc(i)*g.Rc(i)*g.Rc(i)) ;
             double H2 = cs2(i,j) / Om2 ;
             wg(i,j).rho = Sig_g[i] * std::exp(- 0.5 * g.Zc(i,j)*g.Zc(i,j) / H2) / std::sqrt(2 * M_PI * H2);
-            wg(i,j).v_phi = R_c(i) * Om2 ;
+            wg(i,j).v_phi = g.Rc(i) * Om2 ;
             wg(i,j).v_R = 0 ;
             wg(i,j).v_Z = 0 ;
         }
@@ -292,7 +293,8 @@ int main() {
     SourcesGas srcgas(gas_floor, M_star, mu) ;
     GasDynamics dyngas(srcgas, cs, 0.4, 0.2, gas_floor) ;
 
-    double dt_CFL = std::min(dyn.get_CFL_limit(g, Ws_g), dyn.get_CFL_limit(g, Ws_d, Ws_g)) ;
+    double dt_CFL = dyn.get_CFL_limit(g, Ws_d, Ws_g) ;
+    dt_CFL = std::min(dyngas.get_CFL_limit(g, Ws_g), dt_CFL) ;
 
     std::cout << dt_CFL << "\n";
 
@@ -368,7 +370,7 @@ int main() {
 
             // Gas updates
 
-            dyngas(g, Ws_g, nu, dt)
+            dyngas(g, Ws_g, nu.get(), dt);
 
             // update_gas_sigma(g, Sig_g, dt, nu, gas_boundary, gas_floor);
             // compute_hydrostatic_equilibrium(star, g, Ws_g, cs2, Sig_g, Ws_d, gas_floor);
@@ -391,7 +393,7 @@ int main() {
 
             if (count < 1000) {
                 dt_CFL = std::min(dyn.get_CFL_limit(g, Ws_d, Ws_g), 1.025*dt); // Calculate new CFL condition time-step 
-                dt_CFL = std::min(dt_CFL, dyngas.get_CFL_limit(g, Ws_g))
+                dt_CFL = std::min(dt_CFL, dyngas.get_CFL_limit(g, Ws_g));
             }
             else {
                 dt_CFL = std::min(dyngas.get_CFL_limit(g, Ws_g), dyn.get_CFL_limit(g, Ws_d, Ws_g));

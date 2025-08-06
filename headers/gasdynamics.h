@@ -8,8 +8,7 @@
 #include "grid.h"
 #include "utils.h"
 #include "dustdynamics.h"
-
-class SourcesBase ; 
+#include "sources.h"
 
 __global__
 void _set_boundaries(GridRef g, Field3DRef<Prims> w, int bound, double floor) ;
@@ -18,7 +17,7 @@ class GasDynamics {
 
     public:
 
-        GasDynamics(SourcesBase& sources, FieldConstRef<double> cs, double CFL_adv=0.4, double CFL_diff=0.1, double floor=1.e-30) : 
+        GasDynamics(SourcesGas<>& sources, FieldConstRef<double> cs, double CFL_adv=0.4, double CFL_diff=0.1, double floor=1.e-30) : 
                 _CFL_adv(CFL_adv), _CFL_diff(CFL_diff), _floor(floor), _sources(sources), _cs(cs) {};
 
         void set_CFL_adv(double cfl) {
@@ -38,7 +37,7 @@ class GasDynamics {
 
         void floor_above(Grid&g, Field<Prims>& w_dust, Field<Prims>& w_gas, CudaArray<double>& h);
 
-        void operator() (Grid& g, Field<Prims>& w_gas, const CudaArray<double> nu, double dt) ;
+        void operator() (Grid& g, Field<Prims>& w_gas, const double* nu, double dt) ;
 
         double get_CFL_limit(const Grid& g, const Field<Prims>& w_gas) ;
         double get_CFL_limit_debug(const Grid& g, const Field<Prims>& w_gas);
@@ -50,7 +49,7 @@ class GasDynamics {
         double _CFL_adv;
         double _CFL_diff;
         double _floor;
-        SourcesBase& _sources;
+        SourcesGas<>& _sources;
 
         int _boundary = BoundaryFlags::open_R_inner | BoundaryFlags::open_R_outer;
 

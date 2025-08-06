@@ -419,7 +419,7 @@ __global__ void _set_boundary_flux(GridRef g, int bound, FieldRef<Quants> fluxR,
 }
 
 // gas evolution operator
-void GasDynamics::operator() (Grid& g, Field<Prims>& w_gas, const CudaArray<double> nu, double dt) {
+void GasDynamics::operator() (Grid& g, Field<Prims>& w_gas, const double* nu, double dt) {
     if (g.Nghost < 2)
         throw std::invalid_argument("Gas dynamics requires at least 2 ghost cells") ;
 
@@ -447,7 +447,7 @@ void GasDynamics::operator() (Grid& g, Field<Prims>& w_gas, const CudaArray<doub
     check_CUDA_errors("_set_boundary_flux") ;
     _update_quants<<<blocks,threads>>>(g, q_mids, q, dt/2., fluxR, fluxZ);
     check_CUDA_errors("_update_quants") ;
-    _sources.source_exp_gas(g, w_gas, q_mids, nu, _cs, dt/2.);
+    _sources.source_exp(g, w_gas, q_mids, nu, _cs, dt/2.);
     _calc_prim<<<blocks,threads>>>(g, q_mids, w_gas);
     check_CUDA_errors("_calc_prim") ; 
     
@@ -465,7 +465,7 @@ void GasDynamics::operator() (Grid& g, Field<Prims>& w_gas, const CudaArray<doub
     // set_flux_to_zero<<<blocks,threads>>>(g, fluxR);
     _update_quants<<<blocks,threads>>>(g, q_mids, q, dt, fluxR, fluxZ);
     check_CUDA_errors("_update_quants") ;
-    _sources.source_exp_gas(g, w_gas, q_mids, nu, _cs, dt);
+    _sources.source_exp(g, w_gas, q_mids, nu, _cs, dt);
     _calc_prim<<<blocks, threads>>>(g, q_mids, w_gas);
     check_CUDA_errors("_calc_prim") ; 
 }
