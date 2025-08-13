@@ -49,7 +49,7 @@ void set_up_gas(Grid& g, CudaArray<double>& Sig_g, Field<Prims>& wg, CudaArray<d
     for (int i=0; i<g.NR+2*g.Nghost; i++) {
         Sig_g[i] *= Mdisc/Mtot + 1e-30;
     }
-
+    
     for (int i=0; i<g.NR+2*g.Nghost; i++){
         for (int j=0; j<g.Nphi+2*g.Nghost; j++){
             double Om2 = GMsun * Mstar / (g.Rc(i)*g.Rc(i)*g.Rc(i)) ;
@@ -60,7 +60,7 @@ void set_up_gas(Grid& g, CudaArray<double>& Sig_g, Field<Prims>& wg, CudaArray<d
             wg(i,j).v_Z = 0 ;
         }
     }
-
+    
 }
 
 void set_up_dust(Grid& g, Field3D<Prims>& qd, Field<Prims>& wg, Field3D<double>& D, SizeGrid& sizes, double alpha, Field<double>& cs, double floor, double gfloor, double Mstar) {
@@ -163,7 +163,7 @@ int main() {
     // Set up spatial grid 
 
     Grid::params p;
-    p.NR = 50;
+    p.NR = 500;
     p.Nphi = 1;
     p.Nghost = 2;
 
@@ -290,8 +290,7 @@ int main() {
     Sources src(T, Ws_g, sizes, floor, M_star, mu);
     DustDynamics dyn(D, cs, src, 0.4, 0.2, floor, gas_floor);
 
-    SourcesGas srcgas(gas_floor, M_star, mu) ;
-    GasDynamics dyngas(srcgas, cs, 0.4, 0.2, gas_floor) ;
+    GasDynamics dyngas(cs, 0.4, 0.2, M_star, gas_floor) ;
 
     double dt_CFL = dyn.get_CFL_limit(g, Ws_d, Ws_g) ;
     dt_CFL = std::min(dyngas.get_CFL_limit(g, Ws_g), dt_CFL) ;
@@ -375,7 +374,7 @@ int main() {
             // update_gas_sigma(g, Sig_g, dt, nu, gas_boundary, gas_floor);
             // compute_hydrostatic_equilibrium(star, g, Ws_g, cs2, Sig_g, Ws_d, gas_floor);
             // calc_gas_velocities(g, Sig_g, Ws_g, cs2, nu, alpha, star, gas_boundary, gas_floor);  
-            compute_D(g, D, Ws_g, cs2, M_star, alpha, 1.);
+            // compute_D(g, D, Ws_g, cs2, M_star, alpha, 1.);
 
             // Coagulation update when 1 internal coagulation time-step has passed in the global simulation time
 
@@ -396,7 +395,8 @@ int main() {
                 dt_CFL = std::min(dt_CFL, dyngas.get_CFL_limit(g, Ws_g));
             }
             else {
-                dt_CFL = std::min(dyngas.get_CFL_limit(g, Ws_g), dyn.get_CFL_limit(g, Ws_d, Ws_g));
+                dt_CFL = dyn.get_CFL_limit(g, Ws_d, Ws_g) ;
+                dt_CFL = std::min(dyngas.get_CFL_limit(g, Ws_g), dt_CFL);
             }
                 
             // Uncomment this section for writing restart files for jobs on clusters that need to be re-batched after a certain amount of time; here a restart file is written after 20 hrs

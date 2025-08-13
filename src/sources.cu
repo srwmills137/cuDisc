@@ -57,24 +57,48 @@ double vl_Z2D(GridRef& g, FieldRef<double>& Qty, int i, int j) {
     return _vl_slope_gas(dQF, dQB, cF, cB) ;
 }
 
-// compute R derivative
-__device__
-double vl_R2D(GridRef& g, FieldRef<double>& Qty, int i, int j) {
-    return (vl_r2D(g, Qty, i, j) - g.sin_th_c(j) * vl_Z2D(g, Qty, i, j)) / g.cos_th_c(j) ;
-}
-
-// compute TRphi and TZphi components of the stress tensor field
+// compute Z derivative
 __global__
-void _calc_T(GridRef g, FieldRef<Prims> wg, FieldRef<double> TRphi, FieldRef<double> TZphi, FieldRef<double> vphi, const double* nu) {
+void _Z_deriv(GridRef g, FieldRef<double> Qty, FieldRef<double> dQtydZ) {
     int iidx = threadIdx.x + blockIdx.x*blockDim.x ;
     int jidx = threadIdx.y + blockIdx.y*blockDim.y ;
     int istride = gridDim.x * blockDim.x ;
     int jstride = gridDim.y * blockDim.y ;
 
-    for (int i=iidx; i<g.NR+2*g.Nghost; i+=istride) {
-        for (int j=jidx; j<g.Nphi+2*g.Nghost; j+=jstride) {
-            TRphi(i,j) = wg(i,j).rho * nu[i] * (vl_R2D(g, vphi, i, j) - vphi(i,j) / g.Rc(i)) ;
-            TZphi(i,j) = wg(i,j).rho * nu[i] * vl_Z2D(g, vphi, i, j) ;
+    for (int i=iidx+g.Nghost; i<g.NR+g.Nghost; i+=istride) {
+        for (int j=jidx+g.Nghost; j<g.Nphi+g.Nghost; j+=jstride) {
+            dQtydZ(i,j) = vl_Z2D(g, Qty, i, j) ;
+        }
+    }
+}
+
+// compute R derivative
+__global__
+void _R_deriv(GridRef g, FieldRef<double> Qty, FieldRef<double> dQtydR, FieldRef<double> dQtydZ) {
+    int iidx = threadIdx.x + blockIdx.x*blockDim.x ;
+    int jidx = threadIdx.y + blockIdx.y*blockDim.y ;
+    int istride = gridDim.x * blockDim.x ;
+    int jstride = gridDim.y * blockDim.y ;
+
+    for (int i=iidx+g.Nghost; i<g.NR+g.Nghost; i+=istride) {
+        for (int j=jidx+g.Nghost; j<g.Nphi+g.Nghost; j+=jstride) {
+            dQtydR(i,j) = (vl_r2D(g, Qty, i,j) - g.sin_th_c(j) * dQtydZ(i,j)) / g.cos_th_c(j) ;
+        }
+    }
+}
+
+// compute TRphi and TZphi components of the stress tensor field
+__global__
+void _calc_T(GridRef g, FieldRef<Prims> wg, FieldRef<double> TRphi, FieldRef<double> TZphi, FieldRef<double> vphi, FieldRef<double> dvphidR, FieldRef<double> dvphidZ, const double* nu) {
+    int iidx = threadIdx.x + blockIdx.x*blockDim.x ;
+    int jidx = threadIdx.y + blockIdx.y*blockDim.y ;
+    int istride = gridDim.x * blockDim.x ;
+    int jstride = gridDim.y * blockDim.y ;
+
+    for (int i=iidx+g.Nghost; i<g.NR+g.Nghost; i+=istride) {
+        for (int j=jidx+g.Nghost; j<g.Nphi+g.Nghost; j+=jstride) {
+            TRphi(i,j) = wg(i,j).rho * nu[i] * (dvphidR(i,j) - vphi(i,j) / g.Rc(i)) ;
+            TZphi(i,j) = wg(i,j).rho * nu[i] * dvphidZ(i,j) ;
         }
     }
 }
@@ -176,7 +200,7 @@ void _source_curv_grav_pressure(GridRef g, Field3DRef<Prims> w, Field3DRef<Quant
 
 // Computes the source terms from curvature, gravity, pressure, and viscosity (for gas)
 __global__
-void _source_curv_grav_pres_visc(GridRef g, FieldRef<Quants> u, FieldRef<Prims> wg, double dt, double Mstar, FieldRef<double> p,  FieldRef<double> TRphi, FieldRef<double> TZphi, FieldRef<double> vphi, double floor) {
+void _source_curv_grav_pres_visc(GridRef g, FieldRef<Quants> u, FieldRef<Prims> wg, double dt, double Mstar, FieldRef<double> p,  FieldRef<double> dpdR, FieldRef<double> dpdZ, FieldRef<double> TRphi, FieldRef<double> TZphi, FieldRef<double> dTRphidR, FieldRef<double> dTZphidZ, FieldRef<double> vphi, FieldRef<double> dvphidR, FieldRef<double> dvphidZ, double floor) {
     int iidx = threadIdx.x + blockIdx.x*blockDim.x ;
     int jidx = threadIdx.y + blockIdx.y*blockDim.y ;
     int istride = gridDim.x * blockDim.x ;
@@ -185,9 +209,9 @@ void _source_curv_grav_pres_visc(GridRef g, FieldRef<Quants> u, FieldRef<Prims> 
     for (int i=iidx; i<g.NR+2*g.Nghost; i+=istride) {
         for (int j=jidx; j<g.Nphi+2*g.Nghost; j+=jstride) {
 
-            double f1 = -vl_R2D(g, p, i, j) + wg(i,j).rho*wg(i,j).v_phi*wg(i,j).v_phi/g.Rc(i) - wg(i,j).rho*OmK2(g, Mstar, i, j)*g.Rc(i) ;
-            double f2 = 2*TRphi(i,j) + g.Rc(i)*vl_R2D(g, TRphi, i, j) + g.Rc(i)*vl_Z2D(g, TZphi, i, j) ;
-            double f3 = -vl_Z2D(g, p, i, j) - wg(i,j).rho*OmK2(g, Mstar, i, j)*g.Zc(i,j) ;
+            double f1 = -dpdR(i,j) + wg(i,j).rho*wg(i,j).v_phi*wg(i,j).v_phi/g.Rc(i) - wg(i,j).rho*OmK2(g, Mstar, i, j)*g.Rc(i) ;
+            double f2 = 2*TRphi(i,j) + g.Rc(i)*dTRphidR(i,j) + g.Rc(i)*dTZphidZ(i,j) ;
+            double f3 = -dpdZ(i,j) - wg(i,j).rho*OmK2(g, Mstar, i, j)*g.Zc(i,j) ;
 
             u(i,j).mom_R += dt * f1 ;
             u(i,j).amom_phi += dt * f2 ;
@@ -312,28 +336,40 @@ void SourcesRad<use_full_stokes>::source_imp(Grid& g, Field3D<Prims>& w, double 
 }
 
 // Computes explicit source terms for gas
-template<bool use_full_stokes>
-void SourcesGas<use_full_stokes>::source_exp(Grid& g, Field<Prims>& w_g, Field<Quants>& u, const double* nu, FieldConstRef<double> cs, double dt) {
+void sources_gas(Grid& g, Field<Prims>& w_g, Field<Quants>& u, const double* nu, FieldConstRef<double> cs, double Mstar, double floor, double dt) {
+    Field<double> dvphidR = create_field<double>(g);
+    Field<double> dvphidZ = create_field<double>(g);
     Field<double> TRphi = create_field<double>(g);
     Field<double> TZphi = create_field<double>(g);
+    Field<double> dTRphidR = create_field<double>(g);
+    Field<double> dTRphidZ = create_field<double>(g);
+    Field<double> dTZphidZ = create_field<double>(g);
     Field<double> p = create_field<double>(g);
+    Field<double> dpdR = create_field<double>(g);
+    Field<double> dpdZ = create_field<double>(g);
     Field<double> vphi = create_field<double>(g);
     
     dim3 threads(16,8,8);
     dim3 blocks((g.NR + 2*g.Nghost+15)/16,(g.Nphi + 2*g.Nghost+7)/8, 1) ;
 
     _get_vphi<<<blocks,threads>>>(g, w_g, vphi) ;
+    // find R and Z derivatives of vphi
+    _Z_deriv<<<blocks,threads>>>(g, vphi, dvphidZ);
+    _R_deriv<<<blocks,threads>>>(g, vphi, dvphidR, dvphidZ);
     // find pressure
     _calc_pressure<<<blocks,threads>>>(g, w_g, cs, p) ;
+    _Z_deriv<<<blocks,threads>>>(g, p, dpdZ);
+    _R_deriv<<<blocks,threads>>>(g, p, dpdR, dpdZ);
     // calculate the stress tensor components
-    _calc_T<<<blocks,threads>>>(g, w_g, TRphi, TZphi, vphi, nu) ;
+    _calc_T<<<blocks,threads>>>(g, w_g, TRphi, TZphi, vphi, dvphidR, dvphidZ, nu) ;
+    _Z_deriv<<<blocks,threads>>>(g, TZphi, dTZphidZ);
+    _Z_deriv<<<blocks,threads>>>(g, TRphi, dTRphidZ);
+    _R_deriv<<<blocks,threads>>>(g, TRphi, dTRphidR, dTRphidZ);
     // compute the total source terms
-    _source_curv_grav_pres_visc<<<blocks,threads>>>(g, u, w_g, dt, _Mstar, p, TRphi, TZphi, vphi, _floor);
+    _source_curv_grav_pres_visc<<<blocks,threads>>>(g, u, w_g, dt, Mstar, p, dpdR, dpdZ, TRphi, TZphi, dTRphidR, dTZphidZ, vphi, dvphidR, dvphidZ, floor);
 }
 
 template class Sources<true>;
 template class Sources<false>;
 template class SourcesRad<true>;
 template class SourcesRad<false>;
-template class SourcesGas<true>;
-template class SourcesGas<false>;

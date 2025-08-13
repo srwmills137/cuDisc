@@ -447,7 +447,7 @@ void GasDynamics::operator() (Grid& g, Field<Prims>& w_gas, const double* nu, do
     check_CUDA_errors("_set_boundary_flux") ;
     _update_quants<<<blocks,threads>>>(g, q_mids, q, dt/2., fluxR, fluxZ);
     check_CUDA_errors("_update_quants") ;
-    _sources.source_exp(g, w_gas, q_mids, nu, _cs, dt/2.);
+    sources_gas(g, w_gas, q_mids, nu, _cs, _Mstar, _floor, dt*0.5);
     _calc_prim<<<blocks,threads>>>(g, q_mids, w_gas);
     check_CUDA_errors("_calc_prim") ; 
     
@@ -465,7 +465,7 @@ void GasDynamics::operator() (Grid& g, Field<Prims>& w_gas, const double* nu, do
     // set_flux_to_zero<<<blocks,threads>>>(g, fluxR);
     _update_quants<<<blocks,threads>>>(g, q_mids, q, dt, fluxR, fluxZ);
     check_CUDA_errors("_update_quants") ;
-    _sources.source_exp(g, w_gas, q_mids, nu, _cs, dt);
+    //sources_gas(g, w_gas, q_mids, nu, _cs, _Mstar, _floor, dt);
     _calc_prim<<<blocks, threads>>>(g, q_mids, w_gas);
     check_CUDA_errors("_calc_prim") ; 
 }

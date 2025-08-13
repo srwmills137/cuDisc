@@ -71,21 +71,6 @@ class SourcesRad : public SourcesBase {
 
 } ;
 
-template<bool use_full_stokes=false>
-class SourcesGas {
-
-    public:
-
-        SourcesGas(double floor, double Mstar=1., double mu=2.4) :
-            _floor(floor) {};
-
-        void source_exp(Grid& g, Field<Prims>& w_g, Field<Quants>& u, const double* nu, FieldConstRef<double> cs, double dt);
-
-    private:
-
-        double _Mstar;
-        double _mu; 
-        double _floor;
-} ;
+void sources_gas(Grid& g, Field<Prims>& w_g, Field<Quants>& u, const double* nu, FieldConstRef<double> cs, double Mstar, double floor, double dt) ;
 
 #endif

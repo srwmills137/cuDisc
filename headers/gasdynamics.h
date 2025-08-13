@@ -17,8 +17,8 @@ class GasDynamics {
 
     public:
 
-        GasDynamics(SourcesGas<>& sources, FieldConstRef<double> cs, double CFL_adv=0.4, double CFL_diff=0.1, double floor=1.e-30) : 
-                _CFL_adv(CFL_adv), _CFL_diff(CFL_diff), _floor(floor), _sources(sources), _cs(cs) {};
+        GasDynamics(FieldConstRef<double> cs, double CFL_adv=0.4, double CFL_diff=0.1, double Mstar = 1.0, double floor=1.e-30) : 
+                _CFL_adv(CFL_adv), _CFL_diff(CFL_diff), _floor(floor), _cs(cs) {};
 
         void set_CFL_adv(double cfl) {
             _CFL_adv = cfl;
@@ -49,7 +49,7 @@ class GasDynamics {
         double _CFL_adv;
         double _CFL_diff;
         double _floor;
-        SourcesGas<>& _sources;
+        double _Mstar;
 
         int _boundary = BoundaryFlags::open_R_inner | BoundaryFlags::open_R_outer;
 

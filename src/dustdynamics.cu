@@ -635,8 +635,8 @@ void DustDynamics::operator() (Grid& g, Field3D<Prims>& w_dust, const Field<Prim
     Field3D<Quants> fluxR = Field3D<Quants>(g.NR+2*g.Nghost, g.Nphi+2*g.Nghost, w_dust.Nd);
     Field3D<Quants> fluxZ = Field3D<Quants>(g.NR+2*g.Nghost, g.Nphi+2*g.Nghost, w_dust.Nd);
 
-    dim3 threads(16,8,4) ;
-    dim3 blocks((g.NR + 2*g.Nghost+15)/16,(g.Nphi + 2*g.Nghost+7)/8, (q.Nd+3)/4) ;
+    dim3 threads(8,4,2) ;
+    dim3 blocks((g.NR + 2*g.Nghost+15)/8,(g.Nphi + 2*g.Nghost+7)/4, (q.Nd+3)/2) ;
     //dim3 blocks(4,4,4) ;
 
     _set_boundaries<<<blocks,threads>>>(g, w_dust, _boundary, _floor);
@@ -678,7 +678,7 @@ void DustDynamics::operator() (Grid& g, Field3D<Prims>& w_dust, const Field<Prim
         _calc_diff_flux_vl<false><<<blocks,threads>>>(g, w_dust, w_gas, _cs, fluxR, fluxZ, _D, _gas_floor, _boundary);
         check_CUDA_errors("_calc_diff_flux_vl") ;
     }
-
+    
     // Update quantities a full time step and and source terms.
 
     _set_boundary_flux<<<blocks,threads>>>(g, _boundary, fluxR, fluxZ);
