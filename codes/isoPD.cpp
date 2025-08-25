@@ -145,23 +145,23 @@ void cs2_to_cs(Grid& g, Field<double> &cs, Field<double> &cs2) {
 
 int main() {
 
-    std::filesystem::path dir = std::string("./codes/outputs/isoPD_1D");
+    std::filesystem::path dir = std::string("./codes/outputs/isoPD_1D_compare");
     std::filesystem::create_directories(dir);
 
     // Set up spatial grid 
 
     Grid::params p;
     p.NR = 500;
-    p.Nphi = 1;
+    p.Nphi = 50;
     p.Nghost = 2;
 
     p.Rmin = 5.*au;
     //p.R_power = 0.5;
     p.Rmax = 1000.*au;
 
-    p.theta_min = -M_PI/100.;
+    p.theta_min = 0.;
     //p.theta_power = 0.333;
-    p.theta_max = M_PI/100.;
+    p.theta_max = M_PI/6.;
 
     p.R_spacing = RadialSpacing::log ;
     p.theta_spacing = ThetaSpacing::linear;
@@ -256,15 +256,14 @@ int main() {
     // Choose times to store data
     
     double t = 0, dt;
-    const int ntimes = 14;
-    //const double t_final = 1e6; 
-    //double ts[ntimes] = {10*year, 100*year, 1000*year, 1e4*year};
-    double ts[ntimes] = {10*year, 100*year, 1000*year, 1e4*year, 1e5*year, 2e5*year, 3e5*year, 4e5*year
-    , 5e5*year, 6e5*year, 7e5*year, 8e5*year, 9e5*year, 1e6*year};
-    //double ts[ntimes];
-    //for (int i=0; i<ntimes; i++) {
-    //    ts[i] = t_final*year/((double)ntimes) * i + t_final*year/((double)ntimes);
-    //}
+    const int ntimes = 10;
+    const double t_final = 1e3; 
+    //double ts[ntimes] = {10*year, 100*year, 1000*year, 1e4*year, 1e5*year, 2e5*year, 3e5*year, 4e5*year
+    //, 5e5*year, 6e5*year, 7e5*year, 8e5*year, 9e5*year, 1e6*year};
+    double ts[ntimes];
+    for (int i=0; i<ntimes; i++) {
+        ts[i] = t_final*year/((double)ntimes) * i + t_final*year/((double)ntimes);
+    }
 
     std::ofstream f_times((dir / "2Dtimes.txt"));
     f_times << 0. << "\n";

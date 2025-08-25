@@ -157,17 +157,17 @@ void cs2_to_cs(Grid& g, Field<double> &cs, Field<double> &cs2) {
 
 int main() {
 
-    std::filesystem::path dir = std::string("./codes/outputs/isoPD2D_1D_test");
+    std::filesystem::path dir = std::string("./codes/outputs/isoPD2D_clftest");
     std::filesystem::create_directories(dir);
 
     // Set up spatial grid 
 
     Grid::params p;
     p.NR = 500;
-    p.Nphi = 1;
+    p.Nphi = 50;
     p.Nghost = 2;
 
-    p.Rmin = 1.*au;
+    p.Rmin = 5.*au;
     //p.R_power = 0.5;
     p.Rmax = 1000.*au;
 
@@ -227,9 +227,7 @@ int main() {
     int gas_boundary = BoundaryFlags::open_R_inner | BoundaryFlags::open_R_outer | BoundaryFlags::open_Z_outer;
     double gas_floor = 1e-100;
     double floor = 1.e-10;
-
-    //compute_hydrostatic_equilibrium(star, g, Ws_g, cs2, Sig_g, gas_floor);
-    //calc_gas_velocities(g, Sig_g, Ws_g, cs2, nu, alpha, star, gas_boundary, gas_floor);   
+  
     for (int i=0; i<g.NR + 2*g.Nghost; i++) {
         for (int j=0; j<g.Nphi + 2*g.Nghost; j++) {
             alpha2D(i,j) = alpha;
@@ -269,7 +267,7 @@ int main() {
     
     double t = 0, dt;
     const int ntimes = 2;
-    const double t_final = 10; 
+    const double t_final = 0.03; 
     //double ts[ntimes] = {10*year, 100*year, 1000*year, 1e4*year};
     //double ts[ntimes] = {10*year, 100*year, 1000*year, 1e4*year, 1e5*year, 2e5*year, 3e5*year, 4e5*year
     //, 5e5*year, 6e5*year, 7e5*year, 8e5*year, 9e5*year, 1e6*year};
@@ -288,9 +286,9 @@ int main() {
     // Initialise diffusion-advection solver
 
     Sources src(T, Ws_g, sizes, floor, M_star, mu);
-    DustDynamics dyn(D, cs, src, 0.4, 0.2, floor, gas_floor);
+    DustDynamics dyn(D, cs, src, 1e-6, 1e-6, floor, gas_floor);
 
-    GasDynamics dyngas(cs, 0.4, 0.2, M_star, gas_floor) ;
+    GasDynamics dyngas(cs, 1e-6, 1e-6, M_star, gas_floor) ;
 
     double dt_CFL = dyn.get_CFL_limit(g, Ws_d, Ws_g) ;
     dt_CFL = std::min(dyngas.get_CFL_limit(g, Ws_g), dt_CFL) ;
@@ -366,15 +364,7 @@ int main() {
             dt = std::min(dt_CFL, ti-t); // Set time-step according to CFL condition or proximity to selected time snapshots
             
             dyn(g, Ws_d, Ws_g, dt); // Diffusion-advection update
-
-            // Gas updates
-
             dyngas(g, Ws_g, nu.get(), dt);
-
-            // update_gas_sigma(g, Sig_g, dt, nu, gas_boundary, gas_floor);
-            // compute_hydrostatic_equilibrium(star, g, Ws_g, cs2, Sig_g, Ws_d, gas_floor);
-            // calc_gas_velocities(g, Sig_g, Ws_g, cs2, nu, alpha, star, gas_boundary, gas_floor);  
-            // compute_D(g, D, Ws_g, cs2, M_star, alpha, 1.);
 
             // Coagulation update when 1 internal coagulation time-step has passed in the global simulation time
 
