@@ -18,7 +18,7 @@ class GasDynamics {
     public:
 
         GasDynamics(FieldConstRef<double> cs, double CFL_adv=0.4, double CFL_diff=0.1, double Mstar = 1.0, double floor=1.e-30) : 
-                _CFL_adv(CFL_adv), _CFL_diff(CFL_diff), _floor(floor), _cs(cs) {};
+                _cs(cs), _CFL_adv(CFL_adv), _CFL_diff(CFL_diff), _floor(floor) {};
 
         void set_CFL_adv(double cfl) {
             _CFL_adv = cfl;
